@@ -9,4 +9,10 @@ docs
 .gocache
 /web/node_modules
 /web/dist
+/.env
+/data
+/logs
+/new-api-deploy/.env
+/new-api-deploy/data
+/new-api-deploy/logs
 !THIRD-PARTY-LICENSES.md

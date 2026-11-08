@@ -1,0 +1,99 @@
+# New API 生产部署：在此目录配置 .env 后运行 docker compose。
+# 应用、PostgreSQL、Redis 的持久化文件均使用宿主机目录挂载。
+name: new-api-deploy
+
+services:
+  new-api:
+    image: ${NEW_API_IMAGE:?请在 .env 中填写本仓库发布的固定版本镜像或摘要}
+    restart: unless-stopped
+    command: ["--log-dir", "/app/logs"]
+    stop_grace_period: 30s
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${SERVER_PORT:-3000}:3000"
+    volumes:
+      - ./data/app_data:/data
+      - ./logs:/app/logs
+    environment:
+      SQL_DSN: postgresql://${POSTGRES_USER:-newapi}:${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-new-api}
+      REDIS_CONN_STRING: redis://:${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}@redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET:?请设置固定的 SESSION_SECRET}
+      CRYPTO_SECRET: ${CRYPTO_SECRET:?请设置固定的 CRYPTO_SECRET}
+      SESSION_COOKIE_SECURE: "true"
+      SESSION_COOKIE_TRUSTED_URL: ${SESSION_COOKIE_TRUSTED_URL:?请填写控制台的实际 HTTPS Origin}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?请填写实际反向代理 IP 或 CIDR；无代理时填 none}
+      TZ: ${TZ:-Asia/Shanghai}
+      NODE_NAME: ${NODE_NAME:-new-api-node-1}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:-zh-CN}
+      ERROR_LOG_ENABLED: "true"
+      BATCH_UPDATE_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\":[[:space:]]*true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    # 保持 PostgreSQL 15；升级大版本前需单独迁移数据。
+    image: postgres:15
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-newapi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-new-api}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data/postgres_data:/var/lib/postgresql/data
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?请设置 REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    volumes:
+      - ./data/redis_data:/data
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+networks:
+  new-api-network:
+    driver: bridge

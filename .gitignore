@@ -30,6 +30,10 @@ tiktoken_cache
 electron/node_modules
 electron/dist
 /data/
+# Production deployment: credentials and runtime files stay on the host.
+/new-api-deploy/.env
+/new-api-deploy/data/
+/new-api-deploy/logs/
 .gomodcache/
 .gocache-temp
 .gopath
