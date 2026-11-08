@@ -63,12 +63,18 @@ function Wrapper(props: { children: ReactNode }) {
   )
 }
 
-function respondWithRelease(tag = release.tag_name): void {
+function respondWithRelease(
+  tag = release.tag_name,
+  prerelease = release.prerelease
+): void {
   fetchMock.mockImplementation(
     async () =>
-      new Response(JSON.stringify([{ ...release, tag_name: tag }]), {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify([{ ...release, tag_name: tag, prerelease }]),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
   )
 }
 
@@ -370,6 +376,74 @@ describe('administrator update entry', () => {
 })
 
 describe('version label presentation', () => {
+  test.each([
+    ['v1.0.0-orange', false],
+    ['v1.0.0-rc.48-orange', true],
+  ])(
+    'shows the complete fork tag and release link when upgrading the legacy version to %s',
+    async (tag, isPrerelease) => {
+      const user = userEvent.setup()
+      // Release labels also identify RC builds when GitHub marks them stable.
+      respondWithRelease(tag, false)
+      client.setQueryData(STATUS_QUERY_KEY, { version: 'v0.1.0' })
+      vi.mocked(api.get).mockResolvedValue({
+        data: { success: true, data: { version: 'v0.1.0' } },
+      })
+      render(<SystemUpdateAction presentation='version' />, {
+        wrapper: Wrapper,
+      })
+
+      const trigger = await screen.findByRole('button', {
+        name: new RegExp(
+          `New version available: ${tag.replaceAll('.', '\\.')}`
+        ),
+      })
+      expect(within(trigger).getByText('v0.1.0')).toBeInTheDocument()
+      await user.click(trigger)
+
+      const dialog = screen.getByRole('dialog')
+      expect(within(dialog).getByText(tag)).toBeInTheDocument()
+      expect(
+        within(dialog).getByRole('link', { name: 'Go to GitHub' })
+      ).toHaveAttribute(
+        'href',
+        `https://github.com/JuZiool/new-api-orange/releases/tag/${tag}`
+      )
+      if (isPrerelease) {
+        expect(within(dialog).getByText('Pre-release')).toBeInTheDocument()
+      } else {
+        expect(
+          within(dialog).queryByText('Pre-release')
+        ).not.toBeInTheDocument()
+      }
+    }
+  )
+
+  test.each([
+    ['v1.0.0-orange', 'v1.0.0-rc.49-orange', 1],
+    ['v1.0.0-rc.48-orange', 'v1.0.0-rc.48-orange', 0],
+    ['v1.0.0-rc.48-orange', 'v0.1.0', 1],
+  ])(
+    'does not offer an update from %s to the same or older release %s',
+    async (current, latest, comparison) => {
+      respondWithRelease(latest)
+      client.setQueryData(STATUS_QUERY_KEY, { version: current })
+      vi.mocked(api.get).mockResolvedValue({
+        data: { success: true, data: { version: current } },
+      })
+      const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+
+      await waitFor(() =>
+        expect(hook.result.current.snapshot?.lastCheckedAt).toBeGreaterThan(0)
+      )
+
+      expect(hook.result.current.currentVersion).toBe(current)
+      expect(hook.result.current.release?.tag_name).toBe(latest)
+      expect(hook.result.current.comparison).toBe(comparison)
+      expect(hook.result.current.shouldNotify).toBe(false)
+    }
+  )
+
   test('keeps the current version visible while checking and after finding no newer version', async () => {
     let finishRequest: ((response: Response) => void) | undefined
     fetchMock.mockImplementation(
@@ -606,6 +680,33 @@ describe('version notification preferences', () => {
 })
 
 describe('update cache and scheduling', () => {
+  test('discards a cached upstream release and checks the fork when migrating the update source', async () => {
+    const now = Date.now()
+    localStorage.setItem(
+      'system-update:v1',
+      JSON.stringify({
+        state: {
+          snapshot: {
+            release: { ...release, tag_name: 'v9.0.0' },
+            lastCheckedAt: now,
+            lastAttemptAt: now,
+            error: null,
+          },
+        },
+        version: 0,
+      })
+    )
+    await useSystemUpdateStore.persist.rehydrate()
+    respondWithRelease('v1.0.0-rc.48-orange')
+    const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(hook.result.current.release?.tag_name).toBe('v1.0.0-rc.48-orange')
+    )
+    expect(hook.result.current.shouldNotify).toBe(true)
+  })
+
   test('refreshes the server version during a later automatic check and clears an installed update', async () => {
     vi.useFakeTimers()
     fetchMock.mockImplementation(
@@ -631,10 +732,10 @@ describe('update cache and scheduling', () => {
     await waitFor(() => expect(first.result.current.hasUpdate).toBe(true))
     first.unmount()
     client.clear()
-    const saved = localStorage.getItem('system-update:v1')
+    const saved = localStorage.getItem('system-update:orange:v1')
     expect(saved).not.toBeNull()
     useSystemUpdateStore.setState({ snapshot: null })
-    localStorage.setItem('system-update:v1', String(saved))
+    localStorage.setItem('system-update:orange:v1', String(saved))
     await useSystemUpdateStore.persist.rehydrate()
     client = createAppQueryClient()
     client.setQueryData(STATUS_QUERY_KEY, { version: 'v1.0.0-rc.35' })
@@ -647,11 +748,11 @@ describe('update cache and scheduling', () => {
     'keeps checking when persisted storage is %s',
     async (state) => {
       if (state === 'corrupt') {
-        localStorage.setItem('system-update:v1', '{bad json')
+        localStorage.setItem('system-update:orange:v1', '{bad json')
         await useSystemUpdateStore.persist.rehydrate()
       } else if (state === 'future') {
         localStorage.setItem(
-          'system-update:v1',
+          'system-update:orange:v1',
           JSON.stringify({
             state: {
               snapshot: {

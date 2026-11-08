@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: Version tag approved for this manual release
+        description: 'Upstream-based fork tag approved for this manual release (for example, v1.0.0-rc.48-orange)'
         required: true
         type: string
       sha:
@@ -58,10 +58,15 @@ jobs:
           PUBLISH_LATEST: ${{ inputs.publish_latest }}
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,121}$ ]] || { echo '::error::Invalid image version tag'; exit 1; }
+          [[ "$RELEASE_TAG" == *-orange ]] || { echo '::error::Expected an upstream version tag followed by -orange'; exit 1; }
+          UPSTREAM_TAG="${RELEASE_TAG%-orange}"
+          if [[ ! "$UPSTREAM_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || (( ${#RELEASE_TAG} > 120 )); then
+            echo '::error::Use an upstream version tag followed by -orange, such as v1.0.0-rc.48-orange (at most 120 characters)'
+            exit 1
+          fi
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Expected a full commit SHA'; exit 1; }
           [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]] || { echo '::error::Checkout does not match release commit'; exit 1; }
-          if [[ "$PUBLISH_LATEST" == true && "$RELEASE_TAG" == *-* ]]; then
+          if [[ "$PUBLISH_LATEST" == true && "$UPSTREAM_TAG" == *-* ]]; then
             echo '::error::A prerelease cannot update latest'
             exit 1
           fi
@@ -183,7 +188,8 @@ jobs:
           IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" != *-* ]] || { echo '::error::A prerelease cannot update latest'; exit 1; }
+          UPSTREAM_TAG="${RELEASE_TAG%-orange}"
+          [[ "$UPSTREAM_TAG" != *-* ]] || { echo '::error::A prerelease cannot update latest'; exit 1; }
           docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$IMAGE_DIGEST"
 
       - name: Set up Go for cosign

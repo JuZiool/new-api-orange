@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import { compareSystemVersions, selectLatestRelease } from '../releases'
+import {
+  compareSystemVersions,
+  getSystemReleaseUrl,
+  selectLatestRelease,
+} from '../releases'
 
 describe('system release ordering', () => {
   test.each([
@@ -37,6 +41,13 @@ describe('system release ordering', () => {
     ['v1.0.0+build.1', '1.0.0+build.2', 0],
     ['v1.0.0-rc.37', 'v1.0.0-rc.36', 1],
     ['v1.0.0', 'v1.0.0', 0],
+    ['v0.1.0', 'v1.0.0-rc.48-orange', -1],
+    ['v1.0.0-rc.48-orange', 'v1.0.0-rc.49-orange', -1],
+    ['v1.0.0-rc.48-orange', 'v1.0.0-orange', -1],
+    ['v1.0.0-orange', 'v1.0.0-rc.49-orange', 1],
+    ['v1.0.0-rc.48-orange', 'v0.1.0', 1],
+    ['v1.0.0-orange', 'v1.0.0', 0],
+    ['v1.0.0-orange+build.1', 'v1.0.0-orange+build.2', 0],
     ['v0.0.0', 'v1.0.0', null],
     ['dev', 'v1.0.0', null],
     ['', 'v1.0.0', null],
@@ -65,6 +76,33 @@ describe('system release ordering', () => {
       ])
     ).toBeNull()
   })
+
+  test.each([
+    ['v1.0.0-rc.49-orange', true],
+    ['v1.0.0-orange', false],
+  ])(
+    'selects published fork release %s while preserving its complete tag',
+    (tag, prerelease) => {
+      const releases = [
+        { tag_name: tag, draft: false, prerelease },
+        {
+          tag_name: 'v1.0.0-rc.48-orange',
+          draft: false,
+          prerelease: true,
+        },
+        { tag_name: 'v0.1.0', draft: false, prerelease: false },
+        { tag_name: 'v2.0.0-orange', draft: true, prerelease: false },
+      ]
+
+      const latest = selectLatestRelease(releases)
+      const expectedRelease = { tag_name: tag, prerelease }
+
+      expect(latest).toEqual(expectedRelease)
+      expect(getSystemReleaseUrl(expectedRelease)).toBe(
+        `https://github.com/JuZiool/new-api-orange/releases/tag/${tag}`
+      )
+    }
+  )
 
   test('rejects malformed payloads instead of reporting that the system is current', () => {
     expect(() => selectLatestRelease({ message: 'bad response' })).toThrow()

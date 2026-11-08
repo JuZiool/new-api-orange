@@ -43,14 +43,14 @@ const releaseStages: Record<string, number> = {
   patch: 4,
 }
 
-/** Project tags include post-release patches and historical numeric revisions. */
+/** The fork suffix preserves the upstream version's release stage and order. */
 export function parseSystemVersion(
   value: string | null | undefined
 ): SystemVersion | null {
   const match = value
     ?.trim()
     .match(
-      /^v?(\d+(?:\.\d+){2,})(?:-(alpha|beta|rc|patch)(?:\.(\d+))?(?:-i18nfix\.(\d+))?)?(?:\+[\da-zA-Z.-]+)?$/
+      /^v?(\d+(?:\.\d+){2,})(?:-(alpha|beta|rc|patch)(?:\.(\d+))?(?:-i18nfix\.(\d+))?)?(?:-orange)?(?:\+[\da-zA-Z.-]+)?$/
     )
   if (!match || (match[4] && match[2] !== 'rc')) return null
 
