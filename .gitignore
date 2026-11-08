@@ -34,6 +34,8 @@ electron/dist
 /new-api-deploy/.env
 /new-api-deploy/data/
 /new-api-deploy/logs/
+/new-api-deploy/.new-api-*
+/new-api-backups/
 .gomodcache/
 .gocache-temp
 .gopath

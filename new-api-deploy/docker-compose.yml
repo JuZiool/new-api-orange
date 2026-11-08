@@ -9,7 +9,7 @@ services:
     command: ["--log-dir", "/app/logs"]
     stop_grace_period: 30s
     ports:
-      - "${BIND_HOST:-127.0.0.1}:${SERVER_PORT:-3000}:3000"
+      - "${BIND_HOST:-0.0.0.0}:${SERVER_PORT:-3000}:3000"
     volumes:
       - ./data/app_data:/data
       - ./logs:/app/logs
@@ -47,7 +47,7 @@ services:
 
   postgres:
     # 保持 PostgreSQL 15；升级大版本前需单独迁移数据。
-    image: postgres:15
+    image: ${POSTGRES_IMAGE:-postgres:15}
     restart: unless-stopped
     stop_grace_period: 60s
     environment:
@@ -68,7 +68,7 @@ services:
     logging: *default-logging
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:-redis:7-alpine}
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
