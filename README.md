@@ -12,6 +12,8 @@
 mkdir -p new-api-deploy && cd new-api-deploy && curl -fsSL https://raw.githubusercontent.com/JuZiool/new-api-orange/main/new-api-deploy/to-install.sh | sudo bash
 ```
 
+安装和更新时输入已发布的版本号（如 `v0.1.0`，仅为格式示例），脚本会补全为 `ghcr.io/juziool/new-api-orange:<版本号>`，也支持固定镜像摘要。命令行可使用 `--version <版本号>`，或用 `--image <完整 GHCR 镜像地址>` 指定目标。脚本仅支持 Linux `amd64`（x86_64）和 `arm64`，并在启动前核对镜像架构。
+
 ## 发布
 
 本 fork 使用 GitHub Release 分发程序，使用 GHCR 分发镜像，镜像地址为 `ghcr.io/juziool/new-api-orange:<版本号>`。推送代码或 Git 标签均不会触发发布；只有项目维护者明确要求发布时，才手动运行 [release.yml](./.github/workflows/release.yml)，填写仓库中已存在的版本标签。

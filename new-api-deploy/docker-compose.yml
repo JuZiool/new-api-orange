@@ -1,10 +1,13 @@
-# New API 生产部署：在此目录配置 .env 后运行 docker compose。
+# New API Orange 生产部署：通过安装脚本选择本 fork 已发布的 GHCR 版本。
 # 应用、PostgreSQL、Redis 的持久化文件均使用宿主机目录挂载。
 name: new-api-deploy
 
 services:
   new-api:
-    image: ${NEW_API_IMAGE:?请在 .env 中填写本仓库发布的固定版本镜像或摘要}
+    # 使用 ghcr.io/juziool/new-api-orange 的固定版本或摘要。
+    # 多架构镜像自动匹配 Linux amd64/arm64，无需手动指定 platform。
+    image: ${NEW_API_IMAGE:?请通过安装脚本选择已发布的 GHCR 版本，或在 .env 中填写完整固定镜像地址}
+    pull_policy: missing
     restart: unless-stopped
     command: ["--log-dir", "/app/logs"]
     stop_grace_period: 30s

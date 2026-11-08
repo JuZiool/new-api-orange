@@ -4,6 +4,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 readonly DEFAULT_RAW_BASE_URL="https://raw.githubusercontent.com/JuZiool/new-api-orange/main/new-api-deploy"
+readonly DEFAULT_IMAGE_REPOSITORY="ghcr.io/juziool/new-api-orange"
 readonly HEALTH_TIMEOUT_DEFAULT=180
 readonly SERVICES=(new-api postgres redis)
 readonly SECRET_KEYS=(POSTGRES_PASSWORD REDIS_PASSWORD SESSION_SECRET CRYPTO_SECRET)
@@ -14,6 +15,7 @@ BACKUP_DIR=""
 MODE=""
 MODE_EXPLICIT=false
 IMAGE_OVERRIDE=""
+VERSION_OVERRIDE=""
 ASSUME_YES=false
 NO_PULL=false
 ORIGIN_OVERRIDE=""
@@ -89,7 +91,8 @@ New API Docker 部署入口
 选项：
   --dir <路径>                        部署目录，默认当前目录
   --mode <1|2|3|4|backup>             指定操作，跳过菜单
-  --image <镜像:版本或摘要>            全新安装或更新时指定镜像
+  --version <版本号>                  全新安装或更新时指定已发布版本，如 v0.1.0
+  --image <GHCR 镜像或摘要>            指定本 fork 的固定版本镜像或 sha256 摘要
   --origin <HTTPS Origin>             全新安装的控制台地址
   --trusted-proxies <IP/CIDR>          全新安装的可信代理，无代理填 none
   --port <端口>                       全新安装的宿主机端口，默认 3000
@@ -122,7 +125,16 @@ parse_args() {
         ;;
       --image)
         (($# >= 2)) || die "--image 需要镜像版本或摘要。"
+        [[ -n "$2" ]] || die "--image 需要镜像版本或摘要。"
+        [[ -z "$VERSION_OVERRIDE" ]] || die "--image 与 --version 不能同时使用。"
         IMAGE_OVERRIDE="$2"
+        shift 2
+        ;;
+      --version)
+        (($# >= 2)) || die "--version 需要已发布的版本号。"
+        [[ -z "$IMAGE_OVERRIDE" ]] || die "--version 与 --image 不能同时使用。"
+        [[ "$2" == v* && "$2" != */* ]] || die "--version 请填写 v0.1.0 或 v0.1.0-rc.1 这样的版本号。"
+        VERSION_OVERRIDE="$2"
         shift 2
         ;;
       --origin|--trusted-proxies|--port)
@@ -252,11 +264,16 @@ check_tools() {
   [[ "$DOCKER_ENDPOINT" == unix://* ]] || die "只支持本机 Docker Unix socket，不操作远程 Docker。"
   docker_exec compose version >/dev/null 2>&1 || die "未找到 Docker Compose 插件，请先安装。"
   docker_exec info >/dev/null 2>&1 || die "Docker 服务未运行或无法访问。"
+  if [[ "$MODE" != 4 ]]; then
+    local platform
+    platform="$(docker_exec version --format '{{.Server.Os}}/{{.Server.Arch}}')"
+    [[ "$platform" == linux/amd64 || "$platform" == linux/arm64 ]] || die "本 fork 只支持 Linux amd64（x86_64）或 arm64，当前 Docker 服务为 $platform。"
+  fi
 }
 
 docker_exec() {
   (
-    unset DOCKER_CONTEXT DOCKER_HOST
+    unset DOCKER_CONTEXT DOCKER_HOST DOCKER_DEFAULT_PLATFORM
     if [[ -n "$DOCKER_ENDPOINT" ]]; then
       docker --host "$DOCKER_ENDPOINT" "$@"
     else
@@ -392,6 +409,35 @@ validate_image() {
   [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._/@:+-]*$ ]] || die "镜像名称含无效字符。"
   last="${value##*/}"
   [[ "$last" == *:* ]] || die "镜像必须包含明确版本标签或 sha256 摘要。"
+}
+
+normalize_app_image() {
+  local value="$1" digest
+  if [[ "$value" == "$DEFAULT_IMAGE_REPOSITORY@sha256:"* ]]; then
+    value="${value#"$DEFAULT_IMAGE_REPOSITORY@"}"
+  fi
+  if [[ "$value" == sha256:* ]]; then
+    digest="${value#sha256:}"
+    [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || die "镜像摘要必须是 sha256: 后接 64 位小写十六进制字符。"
+    printf '%s@sha256:%s' "$DEFAULT_IMAGE_REPOSITORY" "$digest"
+    return
+  fi
+  if [[ "$value" == "$DEFAULT_IMAGE_REPOSITORY:"* ]]; then
+    value="${value#"$DEFAULT_IMAGE_REPOSITORY:"}"
+  fi
+  if [[ ! "$value" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || (( ${#value} > 120 )); then
+    die "请选择本 fork 已发布的固定版本（如 v0.1.0、v0.1.0-rc.1）或 $DEFAULT_IMAGE_REPOSITORY@sha256:<摘要>；不接受其他镜像仓库或 latest 等浮动标签。"
+  fi
+  printf '%s:%s' "$DEFAULT_IMAGE_REPOSITORY" "$value"
+}
+
+verify_app_image() {
+  local file="${1:-$DEPLOY_DIR/.env}" image expected actual
+  image="$(read_env_value NEW_API_IMAGE "$file")"
+  expected="$(docker_exec version --format '{{.Server.Os}}/{{.Server.Arch}}')"
+  [[ "$expected" == linux/amd64 || "$expected" == linux/arm64 ]] || die "本 fork 只支持 Linux amd64（x86_64）或 arm64，当前 Docker 服务为 $expected。"
+  actual="$(docker_exec image inspect "$image" --format '{{.Os}}/{{.Architecture}}')" || die "本地未找到目标应用镜像；请先拉取镜像，或检查 --no-pull 使用的本地镜像。"
+  [[ "$actual" == "$expected" ]] || die "应用镜像平台为 $actual，与本机 Docker 平台 $expected 不一致。"
 }
 
 validate_env() {
@@ -722,8 +768,9 @@ fresh_install() {
   done
   prepare_runtime_files
   local image origin proxies key candidate port
-  image="${IMAGE_OVERRIDE:-$(prompt_value '请输入 New API 镜像（例如 registry.example/new-api:v1）')}"
+  image="${IMAGE_OVERRIDE:-${VERSION_OVERRIDE:-$(prompt_value '请输入已发布版本号（如 v0.1.0）或本 fork 的 GHCR 镜像/摘要')}}"
   [[ -n "$image" ]] || die "必须填写 NEW_API_IMAGE。"
+  image="$(normalize_app_image "$image")"
   origin="${ORIGIN_OVERRIDE:-$(prompt_value '请输入控制台 HTTPS Origin（例如 https://api.example.com）')}"
   proxies="${PROXIES_OVERRIDE:-$(prompt_value '请输入可信反向代理 IP/CIDR；无代理填 none' none)}"
   port="${PORT_OVERRIDE:-$(prompt_value '请输入应用宿主机端口' 3000)}"
@@ -740,6 +787,7 @@ fresh_install() {
   verify_config "$candidate"
   [[ -z "$(compose_env "$candidate" ps --all --quiet)" ]] || die "同名 Compose 项目已有容器，拒绝全新安装。"
   if [[ "$NO_PULL" != true ]]; then compose_env "$candidate" pull; fi
+  verify_app_image "$candidate"
   verify_postgres_image "$candidate"
   chmod 600 "$candidate"
   mv -- "$candidate" "$DEPLOY_DIR/.env"
@@ -752,17 +800,22 @@ update_install() {
   prepare_runtime_files
   verify_config
   require_stack_running
-  local image current temp_env
+  local image current temp_env default_image=""
   current="$(read_env_value NEW_API_IMAGE)"
-  image="${IMAGE_OVERRIDE:-$(prompt_value "请输入目标镜像；留空继续使用 $current" "$current")}"
+  if default_image="$(normalize_app_image "$current" 2>/dev/null)"; then
+    image="${IMAGE_OVERRIDE:-${VERSION_OVERRIDE:-$(prompt_value "请输入目标版本号或 GHCR 镜像；留空继续使用 $default_image" "$default_image")}}"
+  else
+    image="${IMAGE_OVERRIDE:-${VERSION_OVERRIDE:-$(prompt_value '当前镜像不是本 fork 的固定版本，请输入已发布版本号或本 fork 的 GHCR 镜像/摘要')}}"
+  fi
   [[ -n "$image" ]] || die "目标镜像不能为空。"
-  validate_image "$image"
+  image="$(normalize_app_image "$image")"
   temp_env="$(mktemp "$DEPLOY_DIR/.new-api-env.XXXXXX")"
   TEMP_FILES+=("$temp_env")
   cp -- "$DEPLOY_DIR/.env" "$temp_env"
   set_env_value NEW_API_IMAGE "$image" "$temp_env"
   verify_config "$temp_env"
   if [[ "$NO_PULL" != true ]]; then compose_env "$temp_env" pull new-api; fi
+  verify_app_image "$temp_env"
   confirm_operation "更新前将短暂停机备份，是否继续？"
   create_backup
   mv -f -- "$temp_env" "$DEPLOY_DIR/.env"
@@ -786,6 +839,7 @@ migration_install() {
   pin_manifest_images "$candidate"
   verify_config "$candidate"
   if [[ "$NO_PULL" != true ]]; then compose_env "$candidate" pull; fi
+  verify_app_image "$candidate"
   verify_postgres_image "$candidate"
   chmod 600 "$candidate"
   mv -f -- "$candidate" "$DEPLOY_DIR/.env"
