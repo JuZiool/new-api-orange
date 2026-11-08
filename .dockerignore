@@ -16,5 +16,6 @@ docs
 /new-api-deploy/data
 /new-api-deploy/logs
 /new-api-deploy/.new-api-*
+/new-api-deploy/test-to-install.sh
 /new-api-backups
 !THIRD-PARTY-LICENSES.md
