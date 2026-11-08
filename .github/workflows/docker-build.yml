@@ -111,8 +111,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Set up Go for cosign
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+
+      - name: Install cosign from Go module
+        run: |
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/cosign-bin" go install github.com/sigstore/cosign/v3/cmd/cosign@v3.0.6
+          echo "$RUNNER_TEMP/cosign-bin" >> "$GITHUB_PATH"
+          go version -m "$RUNNER_TEMP/cosign-bin/cosign" | awk '$1 == "mod" && $2 == "github.com/sigstore/cosign/v3" && $3 == "v3.0.6" { found = 1 } END { exit !found }'
+          "$RUNNER_TEMP/cosign-bin/cosign" version
 
       - name: Sign architecture image
         env:
@@ -175,8 +186,19 @@ jobs:
           [[ "$RELEASE_TAG" != *-* ]] || { echo '::error::A prerelease cannot update latest'; exit 1; }
           docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$IMAGE_DIGEST"
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Set up Go for cosign
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+
+      - name: Install cosign from Go module
+        run: |
+          set -euo pipefail
+          GOBIN="$RUNNER_TEMP/cosign-bin" go install github.com/sigstore/cosign/v3/cmd/cosign@v3.0.6
+          echo "$RUNNER_TEMP/cosign-bin" >> "$GITHUB_PATH"
+          go version -m "$RUNNER_TEMP/cosign-bin/cosign" | awk '$1 == "mod" && $2 == "github.com/sigstore/cosign/v3" && $3 == "v3.0.6" { found = 1 } END { exit !found }'
+          "$RUNNER_TEMP/cosign-bin/cosign" version
 
       - name: Sign multi-architecture image
         env:
