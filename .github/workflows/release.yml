@@ -83,9 +83,12 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ needs.prepare.outputs.sha }}
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: '1.4.4'
+      - name: Install Bun from npm
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/bun" --no-audit --no-fund bun@1.4.4
+          echo "$RUNNER_TEMP/bun/node_modules/.bin" >> "$GITHUB_PATH"
+          [[ "$("$RUNNER_TEMP/bun/node_modules/.bin/bun" --version)" == '1.4.4' ]] || { echo '::error::Unexpected Bun version'; exit 1; }
       - name: Build Frontend
         env:
           CI: ""
