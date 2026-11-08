@@ -91,7 +91,7 @@ New API Docker 部署入口
 选项：
   --dir <路径>                        部署目录，默认当前目录
   --mode <1|2|3|4|backup>             指定操作，跳过菜单
-  --version <版本号>                  全新安装或更新时指定已发布版本，如 v1.0.0-rc.48-orange
+  --version <版本号>                  全新安装或更新时指定已发布版本，如 v1.0.0-rc.48-orange.1
   --image <GHCR 镜像或摘要>            指定本 fork 的固定版本镜像或 sha256 摘要
   --origin <HTTPS Origin>             全新安装的控制台地址
   --trusted-proxies <IP/CIDR>          全新安装的可信代理，无代理填 none
@@ -133,7 +133,7 @@ parse_args() {
       --version)
         (($# >= 2)) || die "--version 需要已发布的版本号。"
         [[ -z "$IMAGE_OVERRIDE" ]] || die "--version 与 --image 不能同时使用。"
-        [[ "$2" == v* && "$2" != */* ]] || die "--version 请填写 v1.0.0-orange 或 v1.0.0-rc.48-orange 这样的版本号。"
+        [[ "$2" == v* && "$2" != */* ]] || die "--version 请填写 v1.0.0-orange 或 v1.0.0-rc.48-orange.1 这样的版本号。"
         VERSION_OVERRIDE="$2"
         shift 2
         ;;
@@ -426,7 +426,7 @@ normalize_app_image() {
     value="${value#"$DEFAULT_IMAGE_REPOSITORY:"}"
   fi
   if [[ ! "$value" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || (( ${#value} > 120 )); then
-    die "请选择本 fork 已发布的固定版本（如 v1.0.0-orange、v1.0.0-rc.48-orange）或 $DEFAULT_IMAGE_REPOSITORY@sha256:<摘要>；不接受其他镜像仓库或 latest 等浮动标签。"
+    die "请选择本 fork 已发布的固定版本（如 v1.0.0-orange、v1.0.0-rc.48-orange.1）或 $DEFAULT_IMAGE_REPOSITORY@sha256:<摘要>；不接受其他镜像仓库或 latest 等浮动标签。"
   fi
   printf '%s:%s' "$DEFAULT_IMAGE_REPOSITORY" "$value"
 }
@@ -768,7 +768,7 @@ fresh_install() {
   done
   prepare_runtime_files
   local image origin proxies key candidate port
-  image="${IMAGE_OVERRIDE:-${VERSION_OVERRIDE:-$(prompt_value '请输入已发布版本号（如 v1.0.0-rc.48-orange）或本 fork 的 GHCR 镜像/摘要')}}"
+  image="${IMAGE_OVERRIDE:-${VERSION_OVERRIDE:-$(prompt_value '请输入已发布版本号（如 v1.0.0-rc.48-orange.1）或本 fork 的 GHCR 镜像/摘要')}}"
   [[ -n "$image" ]] || die "必须填写 NEW_API_IMAGE。"
   image="$(normalize_app_image "$image")"
   origin="${ORIGIN_OVERRIDE:-$(prompt_value '请输入控制台 HTTPS Origin（例如 https://api.example.com）')}"

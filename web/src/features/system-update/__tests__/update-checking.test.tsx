@@ -377,17 +377,20 @@ describe('administrator update entry', () => {
 
 describe('version label presentation', () => {
   test.each([
-    ['v1.0.0-orange', false],
-    ['v1.0.0-rc.48-orange', true],
+    ['v0.1.0', 'v1.0.0-orange', false],
+    ['v0.1.0', 'v1.0.0-rc.48-orange', true],
+    ['v1.0.0-rc.48-orange', 'v1.0.0-rc.48-orange.1', true],
+    ['v1.0.0-orange', 'v1.0.0-orange.1', false],
+    ['v1.0.0-rc.48-orange.2', 'v1.0.0-rc.48-orange.10', true],
   ])(
-    'shows the complete fork tag and release link when upgrading the legacy version to %s',
-    async (tag, isPrerelease) => {
+    'shows the complete fork tag and release link when upgrading %s to %s',
+    async (current, tag, isPrerelease) => {
       const user = userEvent.setup()
       // Release labels also identify RC builds when GitHub marks them stable.
       respondWithRelease(tag, false)
-      client.setQueryData(STATUS_QUERY_KEY, { version: 'v0.1.0' })
+      client.setQueryData(STATUS_QUERY_KEY, { version: current })
       vi.mocked(api.get).mockResolvedValue({
-        data: { success: true, data: { version: 'v0.1.0' } },
+        data: { success: true, data: { version: current } },
       })
       render(<SystemUpdateAction presentation='version' />, {
         wrapper: Wrapper,
@@ -398,7 +401,7 @@ describe('version label presentation', () => {
           `New version available: ${tag.replaceAll('.', '\\.')}`
         ),
       })
-      expect(within(trigger).getByText('v0.1.0')).toBeInTheDocument()
+      expect(within(trigger).getByText(current)).toBeInTheDocument()
       await user.click(trigger)
 
       const dialog = screen.getByRole('dialog')
@@ -423,6 +426,9 @@ describe('version label presentation', () => {
     ['v1.0.0-orange', 'v1.0.0-rc.49-orange', 1],
     ['v1.0.0-rc.48-orange', 'v1.0.0-rc.48-orange', 0],
     ['v1.0.0-rc.48-orange', 'v0.1.0', 1],
+    ['v1.0.0-rc.48-orange.1', 'v1.0.0-rc.48-orange.1', 0],
+    ['v1.0.0-rc.48-orange.2', 'v1.0.0-rc.48-orange.1', 1],
+    ['v1.0.0-rc.49-orange', 'v1.0.0-rc.48-orange.99', 1],
   ])(
     'does not offer an update from %s to the same or older release %s',
     async (current, latest, comparison) => {

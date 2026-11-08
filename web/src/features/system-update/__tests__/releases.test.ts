@@ -48,6 +48,23 @@ describe('system release ordering', () => {
     ['v1.0.0-rc.48-orange', 'v0.1.0', 1],
     ['v1.0.0-orange', 'v1.0.0', 0],
     ['v1.0.0-orange+build.1', 'v1.0.0-orange+build.2', 0],
+    ['v1.0.0-rc.48-orange', 'v1.0.0-rc.48-orange.1', -1],
+    ['v1.0.0-rc.48-orange.1', 'v1.0.0-rc.48-orange.2', -1],
+    ['v1.0.0-rc.48-orange.2', 'v1.0.0-rc.48-orange.10', -1],
+    ['v1.0.0-rc.48-orange.10', 'v1.0.0-rc.48-orange.2', 1],
+    ['v1.0.0-rc.48-orange.1', 'v1.0.0-rc.48-orange.1', 0],
+    ['v1.0.0-rc.48-orange.999', 'v1.0.0-rc.49-orange', -1],
+    ['v1.0.0-rc.48-orange.999', 'v1.0.0-orange', -1],
+    ['v1.0.0-orange', 'v1.0.0-orange.1', -1],
+    ['v1.0.0-orange.999', 'v1.0.1-orange', -1],
+    ['v1.0.0-orange.1+build.1', 'v1.0.0-orange.1+build.2', 0],
+    ['v1.0.0-orange.9007199254740992', 'v1.0.0-orange.9007199254740993', -1],
+    ['v1.0.0-rc.19-i18nfix.1-orange.99', 'v1.0.0-rc.19-i18nfix.2-orange', -1],
+    ['v1.0.0-orange.0', 'v1.0.0-orange', null],
+    ['v1.0.0-orange.01', 'v1.0.0-orange', null],
+    ['v1.0.0-orange.', 'v1.0.0-orange', null],
+    ['v1.0.0-orange.-1', 'v1.0.0-orange', null],
+    ['v1.0.0-orange.1.2', 'v1.0.0-orange', null],
     ['v0.0.0', 'v1.0.0', null],
     ['dev', 'v1.0.0', null],
     ['', 'v1.0.0', null],
@@ -80,6 +97,8 @@ describe('system release ordering', () => {
   test.each([
     ['v1.0.0-rc.49-orange', true],
     ['v1.0.0-orange', false],
+    ['v1.0.0-rc.49-orange.1', true],
+    ['v1.0.0-orange.1', false],
   ])(
     'selects published fork release %s while preserving its complete tag',
     (tag, prerelease) => {
@@ -103,6 +122,20 @@ describe('system release ordering', () => {
       )
     }
   )
+
+  test('selects the highest numbered fork revision rather than sorting its tag as text', () => {
+    const releases = [
+      { tag_name: 'v1.0.0-rc.48-orange.2', draft: false, prerelease: true },
+      { tag_name: 'v1.0.0-rc.48-orange.10', draft: false, prerelease: true },
+      { tag_name: 'v1.0.0-rc.48-orange', draft: false, prerelease: true },
+      { tag_name: 'v1.0.0-rc.48-orange.11', draft: true, prerelease: true },
+      { tag_name: 'v1.0.0-rc.48-orange.01', draft: false, prerelease: true },
+    ]
+
+    expect(selectLatestRelease(releases)?.tag_name).toBe(
+      'v1.0.0-rc.48-orange.10'
+    )
+  })
 
   test('rejects malformed payloads instead of reporting that the system is current', () => {
     expect(() => selectLatestRelease({ message: 'bad response' })).toThrow()

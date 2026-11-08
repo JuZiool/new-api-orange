@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing upstream-based fork tag to publish (for example, v1.0.0-rc.48-orange)'
+        description: 'Existing upstream-based fork tag to publish (for example, v1.0.0-rc.48-orange.1)'
         required: true
         type: string
       publish_latest:
@@ -42,13 +42,13 @@ jobs:
           PUBLISH_LATEST: ${{ inputs.publish_latest }}
         run: |
           set -euo pipefail
-          if [[ "$RELEASE_TAG" != *-orange ]]; then
-            echo "::error::Use the upstream version tag followed by -orange, such as v1.0.0-rc.48-orange."
+          if [[ ! "$RELEASE_TAG" =~ ^(.+)-orange(\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::Use the upstream version tag followed by -orange or -orange.N, where N is a positive integer without leading zeros."
             exit 1
           fi
-          UPSTREAM_TAG="${RELEASE_TAG%-orange}"
+          UPSTREAM_TAG="${BASH_REMATCH[1]}"
           if [[ ! "$UPSTREAM_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || (( ${#RELEASE_TAG} > 120 )); then
-            echo "::error::Use an upstream version tag followed by -orange, such as v1.0.0-rc.48-orange (at most 120 characters)."
+            echo "::error::Use an upstream version tag followed by -orange or -orange.N, such as v1.0.0-rc.48-orange.1 (at most 120 characters)."
             exit 1
           fi
           if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
