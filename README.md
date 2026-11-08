@@ -12,6 +12,16 @@
 mkdir -p new-api-deploy && cd new-api-deploy && curl -fsSL https://raw.githubusercontent.com/JuZiool/new-api-orange/main/new-api-deploy/to-install.sh | sudo bash
 ```
 
+## 发布
+
+本 fork 使用 GitHub Release 分发程序，使用 GHCR 分发镜像，镜像地址为 `ghcr.io/juziool/new-api-orange:<版本号>`。推送代码或 Git 标签均不会触发发布；只有项目维护者明确要求发布时，才手动运行 [release.yml](./.github/workflows/release.yml)，填写仓库中已存在的版本标签。
+
+手动发布仅构建该标签对应的 Linux `amd64`（x86_64）和 `arm64` 程序及校验文件，并发布支持这两种架构的 GHCR 镜像。默认不更新 `latest`，部署时使用已发布的固定版本标签或镜像摘要。
+
+首次发布后，需在 GitHub 的 Package settings 中将镜像包设为 Public，服务器才能直接匿名拉取。
+
+服务器升级时重新运行部署脚本，选择“更新”并填写目标 GHCR 镜像。发布新版本不会自动升级已部署的服务器。
+
 ## 开发
 
 后端使用 Go、Gin 与 GORM，前端使用 React、TypeScript、Rsbuild 和 Tailwind CSS。Go 版本要求以 [go.mod](./go.mod) 为准，前端使用 Bun。

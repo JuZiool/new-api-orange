@@ -173,6 +173,12 @@ Tasks that touch none of these (for example unrelated frontend work, authenticat
 
 ### Project Governance
 
+**Release and image publishing authorization:**
+
+- This fork publishes application releases through GitHub Releases and container images through GHCR at `ghcr.io/juziool/new-api-orange`. Use the manually dispatched `.github/workflows/release.yml` as the publication entry point.
+- Publish only after the human user explicitly instructs you to publish a release and/or GHCR image. A request to edit release configuration, commit changes, push code or tags, or run CI does not authorize publication.
+- Without that explicit publishing instruction, do not dispatch publishing workflows, create or publish GitHub Releases, or upload container images. Code pushes, tag pushes, and successful CI runs must not trigger release or image publishing automatically.
+
 **Protected project information:** The following project-related information is strictly protected and MUST NOT be modified, deleted, replaced, or removed under any circumstances:
 
 - Any references, mentions, branding, metadata, or attributions related to **nеw-аρi** (the project name/identity)
