@@ -1,0 +1,13 @@
+name: Push Trigger Self Test
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "push event works"
+
