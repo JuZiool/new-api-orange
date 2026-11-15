@@ -220,6 +220,17 @@ docker compose up -d
 docker compose logs -f new-api
 ```
 
+### One-click deployment (orange)
+
+`deploy/` contains a single-script installer for **New API + PostgreSQL + Redis** that keeps everything inside one directory and provides `install`, `migrate`, `update`, `backup`, `restore`, and `health`.
+
+```bash
+mkdir -p /srv/new-api && cd /srv/new-api
+curl -fsSL https://raw.githubusercontent.com/JuZiool/new-api-orange/main/deploy/install.sh | bash -s -- install
+```
+
+Data lives in `./data` and `./postgres_data`, backups in `./backups`. Moving to another host means copying the whole directory and running `./install.sh migrate`. See [deploy/README.md](./deploy/README.md) for the commands, backup and restore, and the `.env` reference.
+
 ### Storage and configuration
 
 | Component | Options |

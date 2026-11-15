@@ -220,6 +220,17 @@ docker compose up -d
 docker compose logs -f new-api
 ```
 
+### 一键部署脚本（orange）
+
+`deploy/` 里是一个单脚本部署器，装 **New API + PostgreSQL + Redis**，数据全部落在脚本所在目录，提供 `install`、`migrate`、`update`、`backup`、`restore`、`health` 六个命令。
+
+```bash
+mkdir -p /srv/new-api && cd /srv/new-api
+curl -fsSL https://raw.githubusercontent.com/JuZiool/new-api-orange/main/deploy/install.sh | bash -s -- install
+```
+
+数据在 `./data` 和 `./postgres_data`，备份在 `./backups`；换机器就是把整个目录拷过去再跑 `./install.sh migrate`。命令细节、备份恢复和 `.env` 说明见 [deploy/README.md](./deploy/README.md)。
+
 ### 存储与配置
 
 | 组件 | 可选方案 |

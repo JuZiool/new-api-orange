@@ -1,0 +1,87 @@
+# new-api-orange 部署用 Compose 文件
+#
+# 由 deploy/install.sh 下载到部署目录后使用，也可以手工复制后运行：
+#   cp .env.example .env   # 修改密码
+#   docker compose up -d
+#
+# 数据全部落在当前目录：
+#   ./data           应用数据（日志在 data/logs）
+#   ./postgres_data  PostgreSQL 数据
+# Redis 只做缓存，不落盘。
+
+name: ${COMPOSE_PROJECT_NAME:-new-api-orange}
+
+services:
+  new-api:
+    image: ${NEW_API_IMAGE:-ghcr.io/juziool/new-api-orange:latest}
+    restart: unless-stopped
+    command: --log-dir /data/logs
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${BIND_HOST:-0.0.0.0}:${HTTP_PORT:-3000}:3000"
+    volumes:
+      - ./data:/data
+    environment:
+      - SQL_DSN=postgresql://${POSTGRES_USER:-newapi}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-newapi}
+      - REDIS_CONN_STRING=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CRYPTO_SECRET=${CRYPTO_SECRET:-}
+      - TZ=${TZ:-Asia/Shanghai}
+      - ERROR_LOG_ENABLED=${ERROR_LOG_ENABLED:-true}
+      - BATCH_UPDATE_ENABLED=${BATCH_UPDATE_ENABLED:-true}
+      - NODE_NAME=${NODE_NAME:-new-api-node-1}
+      - SYNC_FREQUENCY=${SYNC_FREQUENCY:-60}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
+      - SESSION_COOKIE_TRUSTED_URL=${SESSION_COOKIE_TRUSTED_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\":true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: postgres:${POSTGRES_IMAGE_TAG:-15-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-newapi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-newapi}
+      TZ: ${TZ:-Asia/Shanghai}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-newapi} -d ${POSTGRES_DB:-newapi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:${REDIS_IMAGE_TAG:-7-alpine}
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
