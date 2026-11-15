@@ -23,3 +23,8 @@ jobs:
           docker pull alpine:3.20
           docker tag alpine:3.20 ghcr.io/juziool/newapi-orange-selftest:test
           docker push ghcr.io/juziool/newapi-orange-selftest:test
+
+      - name: Probe real package name
+        run: |
+          docker tag alpine:3.20 ghcr.io/juziool/new-api-orange:selftest-probe
+          docker push ghcr.io/juziool/new-api-orange:selftest-probe
